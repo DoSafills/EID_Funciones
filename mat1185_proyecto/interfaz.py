@@ -178,13 +178,32 @@ class AnalyzerGUI:
         if self.is_processing:
             return
         
-        # Validación temprana antes del threading
         fn_text = self.fn_entry.get().strip()
         if not fn_text:
             self.status_bar.configure(text="Error: Ingresa una función")
             messagebox.showwarning("Advertencia", "Por favor ingresa una función")
             return
 
+        # Validar formato de función ANTES de analizar
+        from sympy import sympify, Symbol
+        try:
+            expr = sympify(fn_text.replace('^', '**'))
+            # Verificar que la expresión contenga la variable x
+            if not expr.has(Symbol('x')):
+                raise ValueError("La expresión debe contener la variable x.")
+        except Exception:
+            ejemplo = (
+                "El formato de ingreso es incorrecto.\n\n"
+                "Ejemplo de formato correcto:\n"
+                "  x^2 + 3*x - 5\n"
+                "  (x^2 + 1)/(x - 2)\n"
+                "  log(x) + x^3"
+            )
+            messagebox.showerror("Formato incorrecto", ejemplo)
+            self.status_bar.configure(text="Error: Formato de función incorrecto")
+            return
+
+        # Si pasa la validación, ahora sí crea el FunctionAnalyzer y analiza
         self.is_processing = True
 
         def analyze_task():
@@ -437,14 +456,14 @@ class AnalyzerGUI:
         self.status_bar.configure(text="Listo")
 
     def _format_analysis_result(self, result):
-        """Formatear resultado de análisis"""
-        lines = []
+        expr_original = self.fn_entry.get().strip()
+        lines = [f"Función ingresada: f(x) = {expr_original}"]
         lines.append("ANÁLISIS DE LA FUNCIÓN")
         lines.append("=" * 30)
         lines.append(f"Expresión: {self.current_analyzer.expr}")
         lines.append("")
-        lines.append(f"Dominio: {result['domain']}")
-        lines.append(f"Rango: {result['range']}")
+        lines.append(f"Dominio: {result.get('domain')}")
+        lines.append(f"Rango: {result.get('range')}")
         lines.append("")
         
         if result['x_intercepts']:
