@@ -260,7 +260,10 @@ class AnalyzerGUI:
                 time.sleep(0.1)
                 
                 # Agregar resultado al final
-                eval_text = f"\n{'='*30}\nEVALUACIÓN:\nf({x_text}) = {res['numeric']}\nPar ordenado: {res['ordered_pair']}\n"
+                if res.get('error'):
+                    eval_text = f"\n{'='*30}\nEVALUACIÓN:\n{res['error']}\n"
+                else:
+                    eval_text = f"\n{'='*30}\nEVALUACIÓN:\nf({x_text}) = {res['numeric']}\nPar ordenado: {res['ordered_pair']}\n"
                 
                 def update_ui():
                     self.output.insert("end", eval_text)

@@ -38,6 +38,16 @@ class FunctionAnalyzer:
 
     def evaluate_at(self, x_value):
         x_expr = sympify(str(x_value))
+        num, den = self.expr.as_numer_denom()
+        den_at_x = den.subs(self.var, x_expr)
+        if den_at_x == 0:
+            return {
+                'x': x_expr,
+                'subs_expr': None,
+                'numeric': None,
+                'ordered_pair': None,
+                'error': f"El denominador es cero en x = {x_expr}. Evaluación indefinida."
+            }
         subs_expr = self.expr.subs(self.var, x_expr)
         numeric = N(subs_expr)
         ordered = (float(N(x_expr)), float(numeric))
