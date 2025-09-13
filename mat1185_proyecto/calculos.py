@@ -1,6 +1,4 @@
-from sympy import symbols, sympify, S, solveset, Eq, N, lambdify
-from sympy.calculus.util import continuous_domain, function_range
-from sympy import Interval, Union, FiniteSet, Pow, log
+from sympy import symbols, sympify, solveset, Eq, N, S, log, Pow
 
 class FunctionAnalyzer:
     def __init__(self, expr_str, var_symbol='x'):
@@ -8,42 +6,61 @@ class FunctionAnalyzer:
         self.var = symbols(var_symbol)
         self.expr = sympify(expr_str)
 
-    def _find_denominator_roots(self):
-        num, den = self.expr.as_numer_denom()
-        if den == 1:
-            return None, "No hay denominador."
-        zeros = solveset(den, self.var, domain=S.Reals)
-        return zeros, f"Denominador: {den}; raíces (excluir): {zeros}"
-
     def analyze(self):
-        steps = []
-        den_roots, den_desc = self._find_denominator_roots()
-        steps.append(den_desc)
+        pasos = []
+        dominio = S.Reals
 
-        domain = continuous_domain(self.expr, self.var, S.Reals)
-        rnge = function_range(self.expr, self.var, domain)
-        x_roots = solveset(Eq(self.expr, 0), self.var, domain)
+        # Restricciones del denominador
+        num, den = self.expr.as_numer_denom()
+        if den != 1:
+            pasos.append(f"Denominador: {den}")
+            raices = solveset(Eq(den, 0), self.var, domain=S.Reals)
+            pasos.append(f"Excluyendo raíces: {raices}")
+            dominio = dominio - raices
+        else:
+            pasos.append("No hay denominador problemático.")
 
-        y0 = None
-        if 0 in domain:
-            y0 = N(self.expr.subs(self.var, 0))
+        # Restricciones por logaritmos
+        for l in self.expr.atoms(log):
+            arg = l.args[0]
+            pasos.append(f"log({arg}) → argumento > 0")
+            dominio = dominio.intersect(solveset(arg > 0, self.var, domain=S.Reals))
+
+        # Restricciones por raíces pares
+        for p in self.expr.atoms(Pow):
+            if p.exp.is_Rational and p.exp.q % 2 == 0:
+                pasos.append(f"Raíz par en {p}, base >=0")
+                dominio = dominio.intersect(solveset(p.base >= 0, self.var, domain=S.Reals))
+
+        # Intersecciones
+        try:
+            x_inter = solveset(Eq(self.expr, 0), self.var, dominio)
+        except Exception:
+            x_inter = None
+        y_int = None
+        if 0 in dominio:
+            y_int = N(self.expr.subs(self.var, 0))
 
         return {
-            'domain': domain,
-            'range': rnge,
-            'x_intercepts': x_roots,
-            'y_intercept': y0,
-            'steps': "\n".join(steps)
+            'domain': dominio,
+            'range': None,
+            'x_intercepts': x_inter,
+            'y_intercept': y_int,
+            'steps': "\n".join(pasos)
         }
 
     def evaluate_at(self, x_value):
         x_expr = sympify(str(x_value))
-        subs_expr = self.expr.subs(self.var, x_expr)
-        numeric = N(subs_expr)
-        ordered = (float(N(x_expr)), float(numeric))
+        pasos = []
+        pasos.append(f"Sustituyendo x={x_expr}")
+        subs = self.expr.subs(self.var, x_expr)
+        pasos.append(f"Resultado simbólico: {subs}")
+        num_val = N(subs)
+        pasos.append(f"Valor numérico: {num_val}")
         return {
             'x': x_expr,
-            'subs_expr': subs_expr,
-            'numeric': numeric,
-            'ordered_pair': ordered
+            'subs_expr': subs,
+            'numeric': num_val,
+            'ordered_pair': (float(N(x_expr)), float(num_val)),
+            'steps': "\n".join(pasos)
         }
