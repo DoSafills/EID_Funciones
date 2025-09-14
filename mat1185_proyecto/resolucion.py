@@ -1,26 +1,34 @@
 from sympy import N
 
 def build_explanation(analyzer, analysis, eval_res=None):
-    lineas = []
-    lineas.append("=== RESOLUCIÓN PASO A PASO ===")
-    lineas.append("Primero vemos el dominio de la función:")
-    lineas.append(str(analysis['domain']))
-    lineas.append("El rango no se calculó en detalle.")
+    lines = []
+    lines.append("=== RESOLUCIÓN DIDÁCTICA ===")
 
-    lineas.append("Intersecciones con el eje X:")
-    if analysis['x_intercepts']:
-        for xi in list(analysis['x_intercepts']):
-            lineas.append(f"f({xi}) = {N(analyzer.expr.subs(analyzer.var, xi))}")
+    # Dominio
+    lines.append(f"Dominio: {analysis.get('domain')}")
+
+    # Rango
+    lines.append(f"Rango: {analysis.get('range')}")
+
+    # Intersecciones X
+    xints = analysis.get('x_intercepts')
+    if xints:
+        for xi in list(xints):
+            check = N(analyzer.expr.subs(analyzer.var, xi))
+            lines.append(f"x = {xi} → f({xi}) = {check}")
     else:
-        lineas.append("No hay intersecciones reales con X.")
+        lines.append("No hay intersecciones reales en X.")
 
-    if analysis['y_intercept'] is not None:
-        lineas.append(f"Con Y: f(0)={analysis['y_intercept']}")
+    # Intersección Y
+    yint = analysis.get('y_intercept')
+    if yint is not None:
+        lines.append(f"Intersección con Y: f(0) = {yint}")
     else:
-        lineas.append("No hay intersección con Y.")
+        lines.append("No hay intersección con Y.")
 
+    # Evaluación puntual
     if eval_res:
         xv, yv = eval_res['ordered_pair']
-        lineas.append(f"Al evaluar en {xv}, f(x)≈{yv}")
+        lines.append(f"Evaluación en x={xv} → f(x)={yv}")
 
-    return "\n".join(lineas)
+    return "\n".join(lines)

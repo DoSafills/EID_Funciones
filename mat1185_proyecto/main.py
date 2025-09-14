@@ -1,11 +1,16 @@
 import customtkinter as ctk
-from interfaz import AnalyzerGUI
+from interfaz import AnalizadorMatematicoGUI
 
 if __name__ == "__main__":
-    
-    ctk.set_appearance_mode("system")  
+    # Configuracion de la apariencia
+    ctk.set_appearance_mode("system") 
     ctk.set_default_color_theme("blue")  
     
-    root = ctk.CTk()
-    app = AnalyzerGUI(root)
-    root.mainloop()
+    # Crear la ventana principal
+    ventana_principal = ctk.CTk()
+    
+    # Inicializar la aplicacion
+    aplicacion = AnalizadorMatematicoGUI(ventana_principal)
+    
+    # Ejecutar el bucle principal
+    ventana_principal.mainloop()
