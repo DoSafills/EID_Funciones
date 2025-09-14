@@ -339,11 +339,16 @@ class AnalyzerGUI:
                 xs = [x_min + i * (x_max - x_min) / num_points for i in range(num_points + 1)]
                 ys = []
                 
+                num, den = self.current_analyzer.expr.as_numer_denom()
                 for i, x in enumerate(xs):
                     try:
-                        y = f_num(x)
-                        if abs(y) > 1e6:
+                        # Verifica si el denominador es cero antes de evaluar
+                        if den.subs(self.current_analyzer.var, x) == 0:
                             y = None
+                        else:
+                            y = f_num(x)
+                            if abs(y) > 1e6:
+                                y = None
                         ys.append(y)
                     except:
                         ys.append(None)
@@ -375,7 +380,7 @@ class AnalyzerGUI:
                     self.ax.set_title(f'f(x) = {self.current_analyzer.expr}', color='white')
                     
                     # Marcar punto evaluado si existe
-                    if self.current_eval and x_min <= float(self.current_eval['x']) <= x_max:
+                    if self.current_eval and self.current_eval['numeric'] is not None and x_min <= float(self.current_eval['x']) <= x_max:
                         eval_x = float(self.current_eval['x'])
                         eval_y = float(self.current_eval['numeric'])
                         self.ax.plot(eval_x, eval_y, 'ro', markersize=6)

@@ -28,7 +28,10 @@ def build_explanation(analyzer, analysis, eval_res=None):
 
     # Evaluación puntual
     if eval_res:
-        xv, yv = eval_res['ordered_pair']
-        lines.append(f"Evaluación en x={xv} → f(x)={yv}")
+        xv, yv = eval_res['ordered_pair'] if eval_res['ordered_pair'] else (None, None)
+        if yv is None:
+            lines.append(f"Evaluación en x={eval_res['x']} → No hay solución (el valor es indefinido).")
+        else:
+            lines.append(f"Evaluación en x={xv} → f(x)={yv}")
 
     return "\n".join(lines)
