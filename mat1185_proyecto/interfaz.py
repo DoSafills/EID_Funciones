@@ -188,7 +188,7 @@ class AnalyzerGUI:
         from sympy import sympify, Symbol
         try:
             expr = sympify(fn_text.replace('^', '**'))
-            # Verificar que la expresión contenga la variable x
+            # Verificar que la expresión contenga una función de variable x
             if not expr.has(Symbol('x')):
                 raise ValueError("La expresión debe contener la variable x.")
         except Exception:
@@ -203,12 +203,12 @@ class AnalyzerGUI:
             self.status_bar.configure(text="Error: Formato de función incorrecto")
             return
 
-        # Si pasa la validación, ahora sí crea el FunctionAnalyzer y analiza
+        # Si pasa la validación,pasa a analizar la funcion
         self.is_processing = True
 
         def analyze_task():
             try:
-                # Simular pasos de análisis
+                # Simular pasos de analisis
                 self.root.after(0, lambda: self.progress_bar.set(0.2))
                 time.sleep(0.1)  # Reducir tiempo de sleep
                 
