@@ -246,18 +246,39 @@ class AnalizadorMatematicoGUI:
         if self.esta_procesando:
             return
         
-        texto_funcion = self.entrada_funcion.get().strip()
-        if not texto_funcion:
-            self.cambiar_estado("Error: Ingresa una funcion")
-            messagebox.showwarning("Advertencia", "Por favor ingresa una funcion")
+        fn_text = self.fn_entry.get().strip()
+        if not fn_text:
+            self.status_bar.configure(text="Error: Ingresa una función")
+            messagebox.showwarning("Advertencia", "Por favor ingresa una función")
             return
 
-        self.esta_procesando = True
+        # Validar formato de función ANTES de analizar
+        from sympy import sympify, Symbol
+        try:
+            expr = sympify(fn_text.replace('^', '**'))
+            # Verificar que la expresión contenga una función de variable x
+            if not expr.has(Symbol('x')):
+                raise ValueError("La expresión debe contener la variable x.")
+        except Exception:
+            ejemplo = (
+                "El formato de ingreso es incorrecto.\n\n"
+                "Ejemplo de formato correcto:\n"
+                "  x^2 + 3*x - 5\n"
+                "  (x^2 + 1)/(x - 2)\n"
+                "  log(x) + x^3"
+            )
+            messagebox.showerror("Formato incorrecto", ejemplo)
+            self.status_bar.configure(text="Error: Formato de función incorrecto")
+            return
+
+        # Si pasa la validación,pasa a analizar la funcion
+        self.is_processing = True
 
         def tarea_analisis():
             try:
-                self.ventana.after(0, lambda: self.actualizar_progreso(0.2))
-                time.sleep(0.1)
+                # Simular pasos de analisis
+                self.root.after(0, lambda: self.progress_bar.set(0.2))
+                time.sleep(0.1)  # Reducir tiempo de sleep
                 
                 self.analizador_actual = FunctionAnalyzer(texto_funcion)
                 self.ventana.after(0, lambda: self.actualizar_progreso(0.5))
@@ -379,12 +400,17 @@ class AnalizadorMatematicoGUI:
                 valores_x = [x_minimo + i * (x_maximo - x_minimo) / puntos_total for i in range(puntos_total + 1)]
                 valores_y = []
                 
-                for i, x in enumerate(valores_x):
+                num, den = self.current_analyzer.expr.as_numer_denom()
+                for i, x in enumerate(xs):
                     try:
-                        y = funcion_numerica(x)
-                        if abs(y) > 1e6:
+                        # Verifica si el denominador es cero antes de evaluar
+                        if den.subs(self.current_analyzer.var, x) == 0:
                             y = None
-                        valores_y.append(y)
+                        else:
+                            y = f_num(x)
+                            if abs(y) > 1e6:
+                                y = None
+                        ys.append(y)
                     except:
                         valores_y.append(None)
                     
@@ -411,10 +437,11 @@ class AnalizadorMatematicoGUI:
                     self.ejes.set_ylabel('f(x)', color='white')
                     self.ejes.set_title(f'f(x) = {self.analizador_actual.expr}', color='white')
                     
-                    if self.evaluacion_actual and x_minimo <= float(self.evaluacion_actual['x']) <= x_maximo:
-                        x_eval = float(self.evaluacion_actual['x'])
-                        y_eval = float(self.evaluacion_actual['numeric'])
-                        self.ejes.plot(x_eval, y_eval, 'ro', markersize=6)
+                    # Marcar punto evaluado si existe
+                    if self.current_eval and self.current_eval['numeric'] is not None and x_min <= float(self.current_eval['x']) <= x_max:
+                        eval_x = float(self.current_eval['x'])
+                        eval_y = float(self.current_eval['numeric'])
+                        self.ax.plot(eval_x, eval_y, 'ro', markersize=6)
                     
                     self.lienzo.draw()
                     self.actualizar_progreso(1.0)
@@ -493,16 +520,16 @@ class AnalizadorMatematicoGUI:
         self.esta_procesando = False
         self.cambiar_estado("Listo")
 
-    def _formatear_resultado_analisis(self, resultado):
-        """Formatea el resultado del analisis para mostrar en la interfaz"""
-        lineas = []
-        lineas.append("ANALISIS DE LA FUNCION")
-        lineas.append("=" * 30)
-        lineas.append(f"Expresion: {self.analizador_actual.expr}")
-        lineas.append("")
-        lineas.append(f"Dominio: {resultado['domain']}")
-        lineas.append(f"Rango: {resultado['range']}")
-        lineas.append("")
+    def _format_analysis_result(self, result):
+        expr_original = self.fn_entry.get().strip()
+        lines = [f"Función ingresada: f(x) = {expr_original}"]
+        lines.append("ANÁLISIS DE LA FUNCIÓN")
+        lines.append("=" * 30)
+        lines.append(f"Expresión: {self.current_analyzer.expr}")
+        lines.append("")
+        lines.append(f"Dominio: {result.get('domain')}")
+        lines.append(f"Rango: {result.get('range')}")
+        lines.append("")
         
         if resultado['x_intercepts']:
             lineas.append("Intersecciones con eje X:")
