@@ -10,240 +10,172 @@ import time
 from calculos import FunctionAnalyzer
 from resolucion import build_explanation
 
-class AnalizadorMatematicoGUI:
-    def __init__(self, ventana_principal):
-        # Configuracion inicial de la ventana
-        self.ventana = ventana_principal
-        self._configurar_ventana()
+class AnalyzerGUI:
+    def __init__(self, root):
+        self.root = root
+        root.title("Analizador de Funciones")
+        root.geometry("1200x700")
+        root.resizable(True, True)
         
-        # Estado del analizador
-        self.analizador_actual = None
-        self.evaluacion_actual = None
-        self.esta_procesando = False
+        # Configurar el grid principal
+        root.grid_columnconfigure(0, weight=1)
+        root.grid_rowconfigure(0, weight=1)
         
-        # Crear la interfaz
-        self._crear_interfaz_completa()
-        self._configurar_atajos_teclado()
-    
-    def _configurar_ventana(self):
-        self.ventana.title("Analizador de Funciones Matematicas")
-        self.ventana.geometry("1200x700")
-        self.ventana.resizable(True, True)
+        self._build_ui()
+        self.current_analyzer = None
+        self.current_eval = None
+        self.is_processing = False  # Flag para prevenir operaciones concurrentes
         
-        self.ventana.grid_columnconfigure(0, weight=1)
-        self.ventana.grid_rowconfigure(0, weight=1)
+        # Vincular eventos de teclado
+        self._bind_keyboard_events()
 
-    def _crear_interfaz_completa(self):
-        # Marco principal que contiene todo
-        marco_principal = ctk.CTkFrame(self.ventana)
-        marco_principal.pack(fill="both", expand=True, padx=10, pady=10)
+    def _build_ui(self):
+        # Frame principal
+        main_frame = ctk.CTkFrame(self.root)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # Crear todas las secciones
-        self._crear_seccion_entrada(marco_principal)
-        self._crear_seccion_progreso(marco_principal)
-        self._crear_seccion_contenido(marco_principal)
-        self._crear_barra_estado(marco_principal)
-    
-    def _crear_seccion_entrada(self, contenedor):
-        # Seccion superior con entrada de funcion y botones
-        seccion_entrada = ctk.CTkFrame(contenedor)
-        seccion_entrada.pack(fill="x", padx=10, pady=5)
+        # Header compacto
+        header_frame = ctk.CTkFrame(main_frame)
+        header_frame.pack(fill="x", padx=10, pady=5)
         
-        # Campo para ingresar la funcion
-        etiqueta_funcion = ctk.CTkLabel(seccion_entrada, text="f(x) =", 
-                                       font=ctk.CTkFont(size=14, weight="bold"))
-        etiqueta_funcion.pack(side="left", padx=5)
+        # Entrada de función
+        ctk.CTkLabel(header_frame, text="f(x) =", font=ctk.CTkFont(size=14, weight="bold")).pack(side="left", padx=5)
+        self.fn_entry = ctk.CTkEntry(header_frame, placeholder_text="x^2", width=200)
+        self.fn_entry.pack(side="left", padx=5)
+        self.fn_entry.insert(0, "x^2")
         
-        self.entrada_funcion = ctk.CTkEntry(seccion_entrada, placeholder_text="x^2", width=200)
-        self.entrada_funcion.pack(side="left", padx=5)
-        self.entrada_funcion.insert(0, "x^2")
+        # Evaluación
+        ctk.CTkLabel(header_frame, text="x =", font=ctk.CTkFont(size=12)).pack(side="left", padx=(15, 5))
+        self.x_entry = ctk.CTkEntry(header_frame, width=80, placeholder_text="2")
+        self.x_entry.pack(side="left", padx=5)
         
-        # Campo para valor de x
-        etiqueta_x = ctk.CTkLabel(seccion_entrada, text="x =", 
-                                 font=ctk.CTkFont(size=12))
-        etiqueta_x.pack(side="left", padx=(15, 5))
+        # Botones principales
+        self.analyze_btn = ctk.CTkButton(header_frame, text="Analizar", width=80, command=self.on_analyze)
+        self.analyze_btn.pack(side="left", padx=5)
         
-        self.entrada_x = ctk.CTkEntry(seccion_entrada, width=80, placeholder_text="2")
-        self.entrada_x.pack(side="left", padx=5)
+        self.evaluate_btn = ctk.CTkButton(header_frame, text="Evaluar", width=80, command=self.on_evaluate)
+        self.evaluate_btn.pack(side="left", padx=5)
         
-        # Botones de accion
-        self._crear_botones_accion(seccion_entrada)
-    
-    def _crear_botones_accion(self, contenedor):
-        # Botones principales de funcionalidad
-        self.boton_analizar = ctk.CTkButton(contenedor, text="Analizar", width=80, 
-                                          command=self.procesar_analisis)
-        self.boton_analizar.pack(side="left", padx=5)
+        self.plot_btn = ctk.CTkButton(header_frame, text="Graficar", width=80, command=self.on_plot)
+        self.plot_btn.pack(side="left", padx=5)
         
-        self.boton_evaluar = ctk.CTkButton(contenedor, text="Evaluar", width=80, 
-                                         command=self.procesar_evaluacion)
-        self.boton_evaluar.pack(side="left", padx=5)
+        self.resolve_btn = ctk.CTkButton(header_frame, text="Resolver", width=80, command=self.on_resolve)
+        self.resolve_btn.pack(side="left", padx=5)
         
-        self.boton_graficar = ctk.CTkButton(contenedor, text="Graficar", width=80, 
-                                          command=self.procesar_grafica)
-        self.boton_graficar.pack(side="left", padx=5)
+        self.clear_btn = ctk.CTkButton(header_frame, text="Limpiar", width=80, command=self.on_clear)
+        self.clear_btn.pack(side="right", padx=5)
         
-        self.boton_resolver = ctk.CTkButton(contenedor, text="Resolver", width=80, 
-                                          command=self.procesar_resolucion)
-        self.boton_resolver.pack(side="left", padx=5)
+        # Frame para barra de progreso
+        self.progress_frame = ctk.CTkFrame(main_frame)
         
-        self.boton_limpiar = ctk.CTkButton(contenedor, text="Limpiar", width=80, 
-                                         command=self.limpiar_todo)
-        self.boton_limpiar.pack(side="right", padx=5)
-    
-    def _crear_seccion_progreso(self, contenedor):
-        # Barra de progreso que aparece cuando se procesa algo
-        self.marco_progreso = ctk.CTkFrame(contenedor)
+        self.progress_label = ctk.CTkLabel(self.progress_frame, text="")
+        self.progress_label.pack(side="left", padx=10)
         
-        self.etiqueta_progreso = ctk.CTkLabel(self.marco_progreso, text="")
-        self.etiqueta_progreso.pack(side="left", padx=10)
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame, width=300)
+        self.progress_bar.pack(side="left", padx=10, pady=10)
+        self.progress_bar.set(0)
         
-        self.barra_progreso = ctk.CTkProgressBar(self.marco_progreso, width=300)
-        self.barra_progreso.pack(side="left", padx=10, pady=10)
-        self.barra_progreso.set(0)
+        # Inicialmente ocultar la barra de progreso
+        self.progress_frame.pack_forget()
         
-        # Inicialmente oculta
-        self.marco_progreso.pack_forget()
-    
-    def _crear_seccion_contenido(self, contenedor):
-        # Area principal dividida en dos columnas
-        marco_contenido = ctk.CTkFrame(contenedor)
-        marco_contenido.pack(fill="both", expand=True, padx=10, pady=5)
+        # Contenido principal en dos columnas
+        self.content_frame = ctk.CTkFrame(main_frame)
+        self.content_frame.pack(fill="both", expand=True, padx=10, pady=5)
         
-        # Columna izquierda: Analisis y resolucion
-        self._crear_columna_texto(marco_contenido)
+        # Columna izquierda - Texto
+        left_frame = ctk.CTkFrame(self.content_frame)
+        left_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
         
-        # Columna derecha: Grafica
-        self._crear_columna_grafica(marco_contenido)
-    
-    def _crear_columna_texto(self, contenedor):
-        columna_izquierda = ctk.CTkFrame(contenedor)
-        columna_izquierda.pack(side="left", fill="both", expand=True, padx=(0, 5))
+        # Análisis
+        ctk.CTkLabel(left_frame, text="Análisis", font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
+        self.output = scrolledtext.ScrolledText(left_frame, height=12, bg="#1a1a1a", fg="#ffffff", 
+                                              font=("Consolas", 9), wrap=tk.WORD)
+        self.output.pack(fill="both", expand=True, padx=10, pady=(0, 5))
         
-        # Seccion de analisis
-        titulo_analisis = ctk.CTkLabel(columna_izquierda, text="Analisis", 
-                                      font=ctk.CTkFont(size=12, weight="bold"))
-        titulo_analisis.pack(anchor="w", padx=10, pady=(10, 5))
+        # Resolución
+        ctk.CTkLabel(left_frame, text="Resolución Paso a Paso", font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=10, pady=(5, 5))
+        self.expl_output = scrolledtext.ScrolledText(left_frame, height=8, bg="#1a1a1a", fg="#ffffff",
+                                                   font=("Consolas", 9), wrap=tk.WORD)
+        self.expl_output.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
-        self.area_analisis = scrolledtext.ScrolledText(columna_izquierda, height=12, 
-                                                      bg="#1a1a1a", fg="#ffffff", 
-                                                      font=("Consolas", 9), wrap=tk.WORD)
-        self.area_analisis.pack(fill="both", expand=True, padx=10, pady=(0, 5))
+        # Columna derecha - Gráfica
+        right_frame = ctk.CTkFrame(self.content_frame)
+        right_frame.pack(side="right", fill="both", expand=True, padx=(5, 0))
         
-        # Seccion de resolucion paso a paso
-        titulo_resolucion = ctk.CTkLabel(columna_izquierda, text="Resolucion Paso a Paso", 
-                                        font=ctk.CTkFont(size=12, weight="bold"))
-        titulo_resolucion.pack(anchor="w", padx=10, pady=(5, 5))
+        # Header de gráfica con controles
+        graph_header = ctk.CTkFrame(right_frame)
+        graph_header.pack(fill="x", padx=10, pady=(10, 5))
         
-        self.area_resolucion = scrolledtext.ScrolledText(columna_izquierda, height=8, 
-                                                        bg="#1a1a1a", fg="#ffffff",
-                                                        font=("Consolas", 9), wrap=tk.WORD)
-        self.area_resolucion.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-    
-    def _crear_columna_grafica(self, contenedor):
-        columna_derecha = ctk.CTkFrame(contenedor)
-        columna_derecha.pack(side="right", fill="both", expand=True, padx=(5, 0))
+        ctk.CTkLabel(graph_header, text="Gráfica", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=5)
         
-        # Encabezado de la grafica con controles
-        self._crear_controles_grafica(columna_derecha)
+        # Controles de rango
+        ctk.CTkLabel(graph_header, text="X:", font=ctk.CTkFont(size=10)).pack(side="left", padx=(10, 2))
+        self.x_min_entry = ctk.CTkEntry(graph_header, width=40, height=20)
+        self.x_min_entry.pack(side="left", padx=1)
+        self.x_min_entry.insert(0, "-10")
         
-        # Area de la grafica
-        self._crear_area_grafica(columna_derecha)
-    
-    def _crear_controles_grafica(self, contenedor):
-        encabezado_grafica = ctk.CTkFrame(contenedor)
-        encabezado_grafica.pack(fill="x", padx=10, pady=(10, 5))
+        ctk.CTkLabel(graph_header, text="a", font=ctk.CTkFont(size=10)).pack(side="left", padx=2)
         
-        titulo_grafica = ctk.CTkLabel(encabezado_grafica, text="Grafica", 
-                                     font=ctk.CTkFont(size=12, weight="bold"))
-        titulo_grafica.pack(side="left", padx=5)
+        self.x_max_entry = ctk.CTkEntry(graph_header, width=40, height=20)
+        self.x_max_entry.pack(side="left", padx=1)
+        self.x_max_entry.insert(0, "10")
         
-        # Controles para el rango de x
-        etiqueta_rango = ctk.CTkLabel(encabezado_grafica, text="X:", 
-                                     font=ctk.CTkFont(size=10))
-        etiqueta_rango.pack(side="left", padx=(10, 2))
+        # Matplotlib
+        self.fig = Figure(figsize=(6, 8), facecolor='#212121', tight_layout=True)
+        self.ax = self.fig.add_subplot(111, facecolor='#2b2b2b')
+        self.ax.tick_params(colors='white', labelsize=8)
+        self.ax.xaxis.label.set_color('white')
+        self.ax.yaxis.label.set_color('white')
+        self.ax.title.set_color('white')
         
-        self.entrada_x_min = ctk.CTkEntry(encabezado_grafica, width=40, height=20)
-        self.entrada_x_min.pack(side="left", padx=1)
-        self.entrada_x_min.insert(0, "-10")
+        self.canvas = FigureCanvasTkAgg(self.fig, master=right_frame)
+        self.canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
-        etiqueta_hasta = ctk.CTkLabel(encabezado_grafica, text="a", 
-                                     font=ctk.CTkFont(size=10))
-        etiqueta_hasta.pack(side="left", padx=2)
-        
-        self.entrada_x_max = ctk.CTkEntry(encabezado_grafica, width=40, height=20)
-        self.entrada_x_max.pack(side="left", padx=1)
-        self.entrada_x_max.insert(0, "10")
-    
-    def _crear_area_grafica(self, contenedor):
-        # Configurar matplotlib para el tema oscuro
-        self.figura = Figure(figsize=(6, 8), facecolor='#212121', tight_layout=True)
-        self.ejes = self.figura.add_subplot(111, facecolor='#2b2b2b')
-        self.ejes.tick_params(colors='white', labelsize=8)
-        self.ejes.xaxis.label.set_color('white')
-        self.ejes.yaxis.label.set_color('white')
-        self.ejes.title.set_color('white')
-        
-        # Canvas para mostrar la grafica
-        self.lienzo = FigureCanvasTkAgg(self.figura, master=contenedor)
-        self.lienzo.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=(0, 10))
-    
-    def _crear_barra_estado(self, contenedor):
-        # Barra de estado en la parte inferior
-        self.barra_estado = ctk.CTkLabel(contenedor, text="Listo", 
-                                        font=ctk.CTkFont(size=10))
-        self.barra_estado.pack(side="bottom", padx=10, pady=5)
-    
-    def _configurar_atajos_teclado(self):
-        # Atajos de teclado para mejor experiencia de usuario
-        self.entrada_funcion.bind('<Return>', lambda e: self.procesar_analisis())
-        self.entrada_x.bind('<Return>', lambda e: self.procesar_evaluacion())
+        # Status bar minimalista
+        self.status_bar = ctk.CTkLabel(main_frame, text="Listo", font=ctk.CTkFont(size=10))
+        self.status_bar.pack(side="bottom", padx=10, pady=5)
 
-    # =============================================================================
-    # GESTION DE PROGRESO Y ESTADOS
-    # =============================================================================
-    
-    def mostrar_progreso(self, mensaje="Procesando..."):
-        """Muestra la barra de progreso con un mensaje"""
-        self.etiqueta_progreso.configure(text=mensaje)
-        self.barra_progreso.set(0)
-        self.marco_progreso.pack(fill="x", padx=10, pady=5, before=self.area_analisis.master.master)
-        self._desactivar_botones()
+    def _bind_keyboard_events(self):
+        """Vincular eventos de teclado básicos"""
+        self.fn_entry.bind('<Return>', lambda e: self.on_analyze())
+        self.x_entry.bind('<Return>', lambda e: self.on_evaluate())
 
-    def ocultar_progreso(self):
-        """Oculta la barra de progreso"""
-        self.marco_progreso.pack_forget()
-        self._activar_botones()
+    def _show_progress(self, text="Procesando..."):
+        """Mostrar barra de progreso con texto"""
+        self.progress_label.configure(text=text)
+        self.progress_bar.set(0)
+        # Mostrar la barra de progreso antes del contenido principal
+        self.progress_frame.pack(fill="x", padx=10, pady=5, before=self.content_frame)
+        self._disable_buttons()
 
-    def _desactivar_botones(self):
-        """Desactiva todos los botones durante el procesamiento"""
-        self.boton_analizar.configure(state="disabled")
-        self.boton_evaluar.configure(state="disabled")
-        self.boton_graficar.configure(state="disabled")
-        self.boton_resolver.configure(state="disabled")
+    def _hide_progress(self):
+        """Ocultar barra de progreso"""
+        self.progress_frame.pack_forget()
+        self._enable_buttons()
 
-    def _activar_botones(self):
-        """Activa todos los botones despues del procesamiento"""
-        self.boton_analizar.configure(state="normal")
-        self.boton_evaluar.configure(state="normal")
-        self.boton_graficar.configure(state="normal")
-        self.boton_resolver.configure(state="normal")
+    def _disable_buttons(self):
+        """Deshabilitar botones durante operación"""
+        self.analyze_btn.configure(state="disabled")
+        self.evaluate_btn.configure(state="disabled")
+        self.plot_btn.configure(state="disabled")
+        self.resolve_btn.configure(state="disabled")
 
-    def actualizar_progreso(self, valor):
-        """Actualiza el valor de la barra de progreso (0.0 a 1.0)"""
-        self.barra_progreso.set(valor)
-        
-    def cambiar_estado(self, mensaje):
-        """Cambia el mensaje de la barra de estado"""
-        self.barra_estado.configure(text=mensaje)
-    
-    # =============================================================================
-    # PROCESAMIENTO PRINCIPAL DE FUNCIONES
-    # =============================================================================
+    def _enable_buttons(self):
+        """Habilitar botones después de operación"""
+        self.analyze_btn.configure(state="normal")
+        self.evaluate_btn.configure(state="normal")
+        self.plot_btn.configure(state="normal")
+        self.resolve_btn.configure(state="normal")
 
-    def procesar_analisis(self):
-        """Analiza la funcion matematica ingresada"""
-        if self.esta_procesando:
+    def _animate_progress(self, duration=1.5):
+        """Animar barra de progreso de forma simplificada"""
+        # Simplificar la animación para evitar conflictos
+        self.progress_bar.set(0)
+        # No hacer animación automática, dejar que cada operación maneje su progreso
+
+    def on_analyze(self):
+        # Prevenir múltiples operaciones concurrentes
+        if self.is_processing:
             return
         
         fn_text = self.fn_entry.get().strip()
@@ -274,131 +206,138 @@ class AnalizadorMatematicoGUI:
         # Si pasa la validación,pasa a analizar la funcion
         self.is_processing = True
 
-        def tarea_analisis():
+        def analyze_task():
             try:
                 # Simular pasos de analisis
                 self.root.after(0, lambda: self.progress_bar.set(0.2))
                 time.sleep(0.1)  # Reducir tiempo de sleep
                 
-                self.analizador_actual = FunctionAnalyzer(texto_funcion)
-                self.ventana.after(0, lambda: self.actualizar_progreso(0.5))
+                self.current_analyzer = FunctionAnalyzer(fn_text)
+                self.root.after(0, lambda: self.progress_bar.set(0.5))
                 time.sleep(0.1)
                 
-                resultado = self.analizador_actual.analyze()
-                self.ventana.after(0, lambda: self.actualizar_progreso(0.8))
+                res = self.current_analyzer.analyze()
+                self.root.after(0, lambda: self.progress_bar.set(0.8))
                 time.sleep(0.1)
                 
-                resultado_formateado = self._formatear_resultado_analisis(resultado)
+                # Formatear resultado
+                formatted_result = self._format_analysis_result(res)
                 
-                def actualizar_interfaz():
-                    self.area_analisis.delete("1.0", "end")
-                    self.area_analisis.insert("end", resultado_formateado)
-                    self.actualizar_progreso(1.0)
-                    self.ventana.after(300, self.ocultar_progreso)
-                    self.cambiar_estado("Análisis completado")
-                    self.esta_procesando = False
+                def update_ui():
+                    self.output.delete("1.0", "end")
+                    self.output.insert("end", formatted_result)
+                    self.progress_bar.set(1.0)
+                    self.root.after(300, self._hide_progress)
+                    self.status_bar.configure(text="Análisis completado")
+                    self.is_processing = False
                 
-                self.ventana.after(0, actualizar_interfaz)
+                self.root.after(0, update_ui)
                 
             except Exception as e:
-                def mostrar_error():
-                    self.ocultar_progreso()
-                    self.cambiar_estado(f"Error: {str(e)}")
+                def show_error():
+                    self._hide_progress()
+                    self.status_bar.configure(text=f"Error: {str(e)}")
                     messagebox.showerror("Error", f"Error al analizar: {str(e)}")
-                    self.esta_procesando = False
+                    self.is_processing = False
                 
-                self.ventana.after(0, mostrar_error)
+                self.root.after(0, show_error)
 
-        self.mostrar_progreso("Analizando funcion...")
-        hilo = threading.Thread(target=tarea_analisis)
-        hilo.daemon = True
-        hilo.start()
+        self._show_progress("Analizando función...")
+        self._animate_progress(1.0)
+        thread = threading.Thread(target=analyze_task)
+        thread.daemon = True
+        thread.start()
 
-    def procesar_evaluacion(self):
-        """Evalua la funcion en un punto especifico"""
-        if self.esta_procesando:
+    def on_evaluate(self):
+        # Prevenir múltiples operaciones concurrentes
+        if self.is_processing:
             return
         
-        if not self.analizador_actual:
-            self.cambiar_estado("Error: Primero analiza una funcion")
-            messagebox.showwarning("Advertencia", "Primero debes analizar una funcion")
+        # Validaciones tempranas antes del threading
+        if not self.current_analyzer:
+            self.status_bar.configure(text="Error: Primero analiza una función")
+            messagebox.showwarning("Advertencia", "Primero debes analizar una función")
             return
         
-        texto_x = self.entrada_x.get().strip()
-        if not texto_x:
-            self.cambiar_estado("Error: Ingresa un valor de x")
+        x_text = self.x_entry.get().strip()
+        if not x_text:
+            self.status_bar.configure(text="Error: Ingresa un valor de x")
             messagebox.showwarning("Advertencia", "Por favor ingresa un valor de x")
             return
 
-        self.esta_procesando = True
+        self.is_processing = True
 
-        def tarea_evaluacion():
+        def evaluate_task():
             try:
-                self.ventana.after(0, lambda: self.actualizar_progreso(0.3))
+                self.root.after(0, lambda: self.progress_bar.set(0.3))
                 time.sleep(0.1)
                 
-                resultado = self.analizador_actual.evaluate_at(texto_x)
-                self.evaluacion_actual = resultado
+                res = self.current_analyzer.evaluate_at(x_text)
+                self.current_eval = res
                 
-                self.ventana.after(0, lambda: self.actualizar_progreso(0.8))
+                self.root.after(0, lambda: self.progress_bar.set(0.8))
                 time.sleep(0.1)
                 
-                if resultado.get('error'):
-                    texto_evaluacion = f"\n{'='*30}\nEVALUACIÓN:\n{resultado['error']}\n"
+                # Agregar resultado al final
+                if res.get('error'):
+                    eval_text = f"\n{'='*30}\nEVALUACIÓN:\n{res['error']}\n"
                 else:
-                    texto_evaluacion = f"\n{'='*30}\nEVALUACIÓN:\nf({texto_x}) = {resultado['numeric']}\nPar ordenado: {resultado['ordered_pair']}\n"
+                    eval_text = f"\n{'='*30}\nEVALUACIÓN:\nf({x_text}) = {res['numeric']}\nPar ordenado: {res['ordered_pair']}\n"
                 
-                def actualizar_interfaz():
-                    self.area_analisis.insert("end", texto_evaluacion)
-                    self.area_analisis.see("end")
-                    self.actualizar_progreso(1.0)
-                    self.ventana.after(300, self.ocultar_progreso)
-                    self.cambiar_estado("Evaluación completada")
-                    self.esta_procesando = False
+                def update_ui():
+                    self.output.insert("end", eval_text)
+                    self.output.see("end")
+                    self.progress_bar.set(1.0)
+                    self.root.after(300, self._hide_progress)
+                    self.status_bar.configure(text="Evaluación completada")
+                    self.is_processing = False
                 
-                self.ventana.after(0, actualizar_interfaz)
+                self.root.after(0, update_ui)
                 
             except Exception as e:
-                def mostrar_error():
-                    self.ocultar_progreso()
-                    self.cambiar_estado(f"Error al evaluar: {str(e)}")
+                def show_error():
+                    self._hide_progress()
+                    self.status_bar.configure(text=f"Error al evaluar: {str(e)}")
                     messagebox.showerror("Error", f"Error al evaluar: {str(e)}")
-                    self.esta_procesando = False
+                    self.is_processing = False
                 
-                self.ventana.after(0, mostrar_error)
+                self.root.after(0, show_error)
 
-        self.mostrar_progreso("Evaluando funcion...")
-        hilo = threading.Thread(target=tarea_evaluacion)
-        hilo.daemon = True
-        hilo.start()
+        self._show_progress("Evaluando función...")
+        self._animate_progress(0.5)
+        thread = threading.Thread(target=evaluate_task)
+        thread.daemon = True
+        thread.start()
 
-    def procesar_grafica(self):
-        """Genera y muestra la grafica de la funcion"""
-        if not self.analizador_actual:
-            self.cambiar_estado("Error: Primero analiza una funcion")
-            messagebox.showwarning("Advertencia", "Primero debes analizar una funcion")
+    def on_plot(self):
+        # Validación temprana antes del threading
+        if not self.current_analyzer:
+            self.status_bar.configure(text="Error: Primero analiza una función")
+            messagebox.showwarning("Advertencia", "Primero debes analizar una función")
             return
 
-        def tarea_grafica():
+        def plot_task():
             try:
+                # Obtener rango
                 try:
-                    x_minimo = float(self.entrada_x_min.get() or -10)
-                    x_maximo = float(self.entrada_x_max.get() or 10)
-                    if x_minimo >= x_maximo:
-                        x_minimo, x_maximo = -10, 10
+                    x_min = float(self.x_min_entry.get() or -10)
+                    x_max = float(self.x_max_entry.get() or 10)
+                    if x_min >= x_max:
+                        x_min, x_max = -10, 10
                 except:
-                    x_minimo, x_maximo = -10, 10
+                    x_min, x_max = -10, 10
                 
-                self.ventana.after(0, lambda: self.actualizar_progreso(0.2))
+                self.root.after(0, lambda: self.progress_bar.set(0.2))
                 
-                funcion_numerica = lambdify(self.analizador_actual.var, self.analizador_actual.expr, modules=["math"])
+                f_num = lambdify(self.current_analyzer.var, self.current_analyzer.expr, modules=["math"])
                 
-                self.ventana.after(0, lambda: self.actualizar_progreso(0.4))
+                self.root.after(0, lambda: self.progress_bar.set(0.4))
                 time.sleep(0.2)
                 
-                puntos_total = 200
-                valores_x = [x_minimo + i * (x_maximo - x_minimo) / puntos_total for i in range(puntos_total + 1)]
-                valores_y = []
+                # Generar puntos
+                num_points = 200
+                xs = [x_min + i * (x_max - x_min) / num_points for i in range(num_points + 1)]
+                ys = []
                 
                 num, den = self.current_analyzer.expr.as_numer_denom()
                 for i, x in enumerate(xs):
@@ -412,30 +351,33 @@ class AnalizadorMatematicoGUI:
                                 y = None
                         ys.append(y)
                     except:
-                        valores_y.append(None)
+                        ys.append(None)
                     
+                    # Actualizar progreso durante cálculo de puntos
                     if i % 50 == 0:
-                        progreso = 0.4 + (i / len(valores_x)) * 0.4
-                        self.ventana.after(0, lambda p=progreso: self.actualizar_progreso(p))
+                        progress = 0.4 + (i / len(xs)) * 0.4
+                        self.root.after(0, lambda p=progress: self.progress_bar.set(p))
 
-                self.ventana.after(0, lambda: self.actualizar_progreso(0.9))
+                self.root.after(0, lambda: self.progress_bar.set(0.9))
                 
-                def actualizar_grafica():
-                    self.ejes.clear()
-                    self.ejes.set_facecolor('#2b2b2b')
+                def update_plot():
+                    self.ax.clear()
+                    self.ax.set_facecolor('#2b2b2b')
                     
-                    datos_validos = [(x, y) for x, y in zip(valores_x, valores_y) if y is not None]
-                    if datos_validos:
-                        x_validos, y_validos = zip(*datos_validos)
-                        self.ejes.plot(x_validos, y_validos, color='#1f77b4', linewidth=2)
+                    # Plotear función
+                    valid_data = [(x, y) for x, y in zip(xs, ys) if y is not None]
+                    if valid_data:
+                        valid_xs, valid_ys = zip(*valid_data)
+                        self.ax.plot(valid_xs, valid_ys, color='#1f77b4', linewidth=2)
                     
-                    self.ejes.axhline(0, color="white", alpha=0.5, linewidth=1)
-                    self.ejes.axvline(0, color="white", alpha=0.5, linewidth=1)
-                    self.ejes.grid(True, alpha=0.3, color='white', linestyle='--')
-                    self.ejes.set_xlim(x_minimo, x_maximo)
-                    self.ejes.set_xlabel('x', color='white')
-                    self.ejes.set_ylabel('f(x)', color='white')
-                    self.ejes.set_title(f'f(x) = {self.analizador_actual.expr}', color='white')
+                    # Configurar gráfica
+                    self.ax.axhline(0, color="white", alpha=0.5, linewidth=1)
+                    self.ax.axvline(0, color="white", alpha=0.5, linewidth=1)
+                    self.ax.grid(True, alpha=0.3, color='white', linestyle='--')
+                    self.ax.set_xlim(x_min, x_max)
+                    self.ax.set_xlabel('x', color='white')
+                    self.ax.set_ylabel('f(x)', color='white')
+                    self.ax.set_title(f'f(x) = {self.current_analyzer.expr}', color='white')
                     
                     # Marcar punto evaluado si existe
                     if self.current_eval and self.current_eval['numeric'] is not None and x_min <= float(self.current_eval['x']) <= x_max:
@@ -443,82 +385,80 @@ class AnalizadorMatematicoGUI:
                         eval_y = float(self.current_eval['numeric'])
                         self.ax.plot(eval_x, eval_y, 'ro', markersize=6)
                     
-                    self.lienzo.draw()
-                    self.actualizar_progreso(1.0)
-                    self.ventana.after(500, self.ocultar_progreso)
-                    self.cambiar_estado("Gráfica completada")
+                    self.canvas.draw()
+                    self.progress_bar.set(1.0)
+                    self.root.after(500, self._hide_progress)
+                    self.status_bar.configure(text="Gráfica completada")
                 
-                self.ventana.after(0, actualizar_grafica)
+                self.root.after(0, update_plot)
                 
             except Exception as e:
-                def mostrar_error():
-                    self.ocultar_progreso()
-                    self.cambiar_estado(f"Error al graficar: {str(e)}")
+                def show_error():
+                    self._hide_progress()
+                    self.status_bar.configure(text=f"Error al graficar: {str(e)}")
                     messagebox.showerror("Error", f"Error al graficar: {str(e)}")
                 
-                self.ventana.after(0, mostrar_error)
+                self.root.after(0, show_error)
 
-        self.mostrar_progreso("Generando grafica...")
-        hilo = threading.Thread(target=tarea_grafica)
-        hilo.daemon = True
-        hilo.start()
+        self._show_progress("Generando gráfica...")
+        self._animate_progress(2.5)
+        thread = threading.Thread(target=plot_task)
+        thread.daemon = True
+        thread.start()
 
-    def procesar_resolucion(self):
-        """Genera la resolucion paso a paso"""
-        if not self.analizador_actual:
-            self.cambiar_estado("Error: Primero analiza una funcion")
-            messagebox.showwarning("Advertencia", "Primero debes analizar una funcion")
+    def on_resolve(self):
+        # Validación temprana antes del threading
+        if not self.current_analyzer:
+            self.status_bar.configure(text="Error: Primero analiza una función")
+            messagebox.showwarning("Advertencia", "Primero debes analizar una función")
             return
 
-        def tarea_resolucion():
+        def resolve_task():
             try:
-                self.ventana.after(0, lambda: self.actualizar_progreso(0.3))
+                self.root.after(0, lambda: self.progress_bar.set(0.3))
                 time.sleep(0.3)
                 
-                analisis = self.analizador_actual.analyze()
+                analysis = self.current_analyzer.analyze()
                 
-                self.ventana.after(0, lambda: self.actualizar_progreso(0.7))
+                self.root.after(0, lambda: self.progress_bar.set(0.7))
                 time.sleep(0.3)
                 
-                texto_explicacion = build_explanation(self.analizador_actual, analisis, self.evaluacion_actual)
+                text = build_explanation(self.current_analyzer, analysis, self.current_eval)
                 
-                def actualizar_interfaz():
-                    self.area_resolucion.delete("1.0", "end")
-                    self.area_resolucion.insert("end", texto_explicacion)
-                    self.actualizar_progreso(1.0)
-                    self.ventana.after(500, self.ocultar_progreso)
-                    self.cambiar_estado("Resolución completada")
+                def update_ui():
+                    self.expl_output.delete("1.0", "end")
+                    self.expl_output.insert("end", text)
+                    self.progress_bar.set(1.0)
+                    self.root.after(500, self._hide_progress)
+                    self.status_bar.configure(text="Resolución completada")
                 
-                self.ventana.after(0, actualizar_interfaz)
+                self.root.after(0, update_ui)
                 
             except Exception as e:
-                def mostrar_error():
-                    self.ocultar_progreso()
-                    self.cambiar_estado(f"Error en resolucion: {str(e)}")
+                def show_error():
+                    self._hide_progress()
+                    self.status_bar.configure(text=f"Error en resolución: {str(e)}")
                     messagebox.showerror("Error", f"Error al resolver paso a paso: {str(e)}")
                 
-                self.ventana.after(0, mostrar_error)
+                self.root.after(0, show_error)
 
-        self.mostrar_progreso("Generando resolucion...")
-        hilo = threading.Thread(target=tarea_resolucion)
-        hilo.daemon = True
-        hilo.start()
-    
-    # =============================================================================
-    # UTILIDADES Y LIMPIEZA
-    # =============================================================================
+        self._show_progress("Generando resolución...")
+        self._animate_progress(1.5)
+        thread = threading.Thread(target=resolve_task)
+        thread.daemon = True
+        thread.start()
 
-    def limpiar_todo(self):
-        """Limpia toda la interfaz y reinicia el estado"""
-        self.area_analisis.delete("1.0", "end")
-        self.area_resolucion.delete("1.0", "end")
-        self.ejes.clear()
-        self.ejes.set_facecolor('#2b2b2b')
-        self.lienzo.draw()
-        self.analizador_actual = None
-        self.evaluacion_actual = None
-        self.esta_procesando = False
-        self.cambiar_estado("Listo")
+    def on_clear(self):
+        """Limpiar todos los campos"""
+        self.output.delete("1.0", "end")
+        self.expl_output.delete("1.0", "end")
+        self.ax.clear()
+        self.ax.set_facecolor('#2b2b2b')
+        self.canvas.draw()
+        self.current_analyzer = None
+        self.current_eval = None
+        self.is_processing = False
+        self.status_bar.configure(text="Listo")
 
     def _format_analysis_result(self, result):
         expr_original = self.fn_entry.get().strip()
@@ -531,16 +471,16 @@ class AnalizadorMatematicoGUI:
         lines.append(f"Rango: {result.get('range')}")
         lines.append("")
         
-        if resultado['x_intercepts']:
-            lineas.append("Intersecciones con eje X:")
-            for intercepcion in resultado['x_intercepts']:
-                lineas.append(f"  x = {intercepcion}")
+        if result['x_intercepts']:
+            lines.append("Intersecciones con eje X:")
+            for intercept in result['x_intercepts']:
+                lines.append(f"  x = {intercept}")
         else:
-            lineas.append("Sin intersecciones con eje X")
+            lines.append("Sin intersecciones con eje X")
         
-        if resultado['y_intercept'] is not None:
-            lineas.append(f"\nInterseccion con eje Y: f(0) = {resultado['y_intercept']}")
+        if result['y_intercept'] is not None:
+            lines.append(f"\nIntersección con eje Y: f(0) = {result['y_intercept']}")
         else:
-            lineas.append("\nSin interseccion con eje Y")
+            lines.append("\nSin intersección con eje Y")
         
-        return "\n".join(lineas)
+        return "\n".join(lines)
